@@ -1,21 +1,4 @@
 // ========================================
-// SUPABASE
-// ========================================
-
-const SUPABASE_URL = "https://vgoezwsinmexomgrlvon.supabase.co";
-const SUPABASE_KEY = "sb_publishable_5aSk6Y-_JDLbWFkKSDylfg_8HYahlnC";
-
-
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_5aSk6Y-_JDLbWFkKSDylfg_8HYahlnC
-
-const supabaseClient = window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_KEY
-);
-
-
-// ========================================
 // EVENT DATA
 // ========================================
 
@@ -77,7 +60,7 @@ let events = [
 
 
 // ========================================
-// USER DATA
+// USER / LOGIN DATA
 // ========================================
 
 let registrations = [];
@@ -90,7 +73,7 @@ let selectedEventIndex = null;
 
 
 // ========================================
-// LOGIN MODAL
+// LOGIN SYSTEM
 // ========================================
 
 function openLoginModal() {
@@ -167,7 +150,7 @@ function requireLogin() {
 
 
 // ========================================
-// SUPABASE LOGIN
+// LOGIN FORM
 // ========================================
 
 const loginForm =
@@ -178,16 +161,14 @@ if (loginForm) {
 
     loginForm.addEventListener(
         "submit",
-        async function(e) {
+        function(e) {
 
             e.preventDefault();
 
-            clearLoginError();
 
-
-            const email =
+            const username =
                 document
-                    .getElementById("loginEmail")
+                    .getElementById("loginUsername")
                     .value
                     .trim();
 
@@ -215,117 +196,83 @@ if (loginForm) {
             }
 
 
-            if (
-                email === "" ||
-                password === ""
-            ) {
-
-                showLoginError(
-                    "Please enter your email and password."
-                );
-
-                return;
-            }
-
-
             const role =
                 selectedRole.value;
 
 
-            const {
-                data,
-                error
-            } =
-                await supabaseClient.auth.signInWithPassword({
-
-                    email: email,
-
-                    password: password
-
-                });
+            clearLoginError();
 
 
-            if (error) {
+            // ========================================
+            // HOST LOGIN
+            // ONLY Admin / admin123 IS ALLOWED
+            // ========================================
 
-                showLoginError(
-                    error.message
-                );
+            if (role === "host") {
 
-                return;
+                if (
+                    username !== "Admin" ||
+                    password !== "admin123"
+                ) {
+
+                    showLoginError(
+                        "❌ Cannot enter as Host. Only Admin can access Host mode."
+                    );
+
+                    return;
+                }
+
             }
 
 
-            const user =
-                data.user;
+            // ========================================
+            // PARTICIPANT LOGIN
+            // ========================================
 
+            if (role === "participant") {
 
-            const {
-                data: profile,
-                error: profileError
-            } =
-                await supabaseClient
-                    .from("profiles")
-                    .select("*")
-                    .eq("id", user.id)
-                    .single();
+                if (
+                    username === "" ||
+                    password === ""
+                ) {
 
+                    showLoginError(
+                        "Please enter your username and password."
+                    );
 
-            if (profileError) {
+                    return;
+                }
 
-                showLoginError(
-                    "User profile not found."
-                );
-
-                await supabaseClient.auth.signOut();
-
-                return;
             }
 
 
-            if (
-                profile.role !== role
-            ) {
-
-                showLoginError(
-                    "Incorrect role selected."
-                );
-
-                await supabaseClient.auth.signOut();
-
-                return;
-            }
-
+            // ========================================
+            // SUCCESSFUL LOGIN
+            // ========================================
 
             currentUser = {
 
-                id: user.id,
+                username: username,
 
-                username:
-                    profile.username,
-
-                role:
-                    profile.role,
-
-                email:
-                    user.email
+                role: role
 
             };
+
+
+            localStorage.setItem(
+                "eventSphereUser",
+                JSON.stringify(currentUser)
+            );
 
 
             closeLoginModal();
 
             updateLoginUI();
 
-            displayEvents();
-
-            displayRegisteredEvents();
-
-            updateStats();
-
 
             alert(
-                `🎉 Welcome ${profile.username}! You are logged in as ${
-                    profile.role === "host"
+                `🎉 Welcome ${username}! You are logged in as ${
+                    role === "host"
                         ? "Host"
                         : "Participant"
                 }.`
@@ -338,68 +285,35 @@ if (loginForm) {
 
 
 // ========================================
-// LOAD LOGGED-IN USER FROM SUPABASE
+// LOAD SAVED USER
 // ========================================
 
-async function loadLoggedInUser() {
+function loadLoggedInUser() {
 
-    const {
-        data,
-        error
-    } =
-        await supabaseClient.auth.getUser();
+    const savedUser =
+        localStorage.getItem(
+            "eventSphereUser"
+        );
 
 
-    if (
-        error ||
-        !data.user
-    ) {
+    if (savedUser) {
 
-        currentUser = null;
+        try {
 
-        return;
+            currentUser =
+                JSON.parse(savedUser);
+
+        } catch (error) {
+
+            currentUser = null;
+
+            localStorage.removeItem(
+                "eventSphereUser"
+            );
+
+        }
+
     }
-
-
-    const user =
-        data.user;
-
-
-    const {
-        data: profile,
-        error: profileError
-    } =
-        await supabaseClient
-            .from("profiles")
-            .select("*")
-            .eq("id", user.id)
-            .single();
-
-
-    if (profileError) {
-
-        currentUser = null;
-
-        await supabaseClient.auth.signOut();
-
-        return;
-    }
-
-
-    currentUser = {
-
-        id: user.id,
-
-        username:
-            profile.username,
-
-        role:
-            profile.role,
-
-        email:
-            user.email
-
-    };
 
 }
 
@@ -414,10 +328,6 @@ function updateLoginUI() {
         document.getElementById("loginNavBtn");
 
 
-    const createBtn =
-        document.getElementById("createNavBtn");
-
-
     const logoutBtn =
         document.getElementById("logoutBtn");
 
@@ -430,24 +340,14 @@ function updateLoginUI() {
 
         if (loginBtn) {
 
-            loginBtn.style.display =
-                "block";
-
-        }
-
-
-        if (createBtn) {
-
-            createBtn.style.display =
-                "block";
+            loginBtn.style.display = "block";
 
         }
 
 
         if (logoutBtn) {
 
-            logoutBtn.style.display =
-                "none";
+            logoutBtn.style.display = "none";
 
         }
 
@@ -458,32 +358,21 @@ function updateLoginUI() {
 
         }
 
+
         return;
     }
 
 
     if (loginBtn) {
 
-        loginBtn.style.display =
-            "none";
+        loginBtn.style.display = "none";
 
     }
 
 
     if (logoutBtn) {
 
-        logoutBtn.style.display =
-            "block";
-
-    }
-
-
-    if (createBtn) {
-
-        createBtn.style.display =
-            currentUser.role === "host"
-                ? "block"
-                : "none";
+        logoutBtn.style.display = "block";
 
     }
 
@@ -506,32 +395,17 @@ function updateLoginUI() {
 // LOGOUT
 // ========================================
 
-async function logout() {
-
-    const {
-        error
-    } =
-        await supabaseClient.auth.signOut();
-
-
-    if (error) {
-
-        alert(
-            "Unable to logout. Please try again."
-        );
-
-        return;
-    }
-
+function logout() {
 
     currentUser = null;
 
 
+    localStorage.removeItem(
+        "eventSphereUser"
+    );
+
+
     updateLoginUI();
-
-    displayEvents();
-
-    displayRegisteredEvents();
 
 
     alert(
@@ -729,8 +603,7 @@ function openRegisterByName(eventName) {
     if (index === -1) return;
 
 
-    selectedEventIndex =
-        index;
+    selectedEventIndex = index;
 
 
     const event =
@@ -871,13 +744,9 @@ function filterEvents(
         });
 
 
-    if (button) {
-
-        button.classList.add(
-            "active"
-        );
-
-    }
+    button.classList.add(
+        "active"
+    );
 
 
     searchEvents();
@@ -917,19 +786,9 @@ function openCreateForm() {
 
 function closeModal() {
 
-    const modal =
-        document.getElementById(
-            "eventModal"
-        );
-
-
-    if (modal) {
-
-        modal.classList.remove(
-            "show"
-        );
-
-    }
+    document
+        .getElementById("eventModal")
+        .classList.remove("show");
 
 }
 
@@ -1148,19 +1007,11 @@ function openRegister(index) {
 
 function closeRegisterModal() {
 
-    const modal =
-        document.getElementById(
+    document
+        .getElementById(
             "registerModal"
-        );
-
-
-    if (modal) {
-
-        modal.classList.remove(
-            "show"
-        );
-
-    }
+        )
+        .classList.remove("show");
 
 }
 
@@ -1231,6 +1082,8 @@ if (registerForm) {
             }
 
 
+            // Check capacity
+
             if (
                 event.registered >=
                 event.capacity
@@ -1243,6 +1096,8 @@ if (registerForm) {
                 return;
             }
 
+
+            // Check duplicate registration
 
             const duplicate =
                 registrations.some(
@@ -1269,16 +1124,15 @@ if (registerForm) {
             }
 
 
+            // Save registration
+
             registrations.push({
 
-                name:
-                    name,
+                name: name,
 
-                email:
-                    email,
+                email: email,
 
-                event:
-                    event.name
+                event: event.name
 
             });
 
@@ -1294,7 +1148,9 @@ if (registerForm) {
 
             displayEvents();
 
+
             displayRegisteredEvents();
+
 
             updateStats();
 
@@ -1594,6 +1450,7 @@ function getEventStatus(event) {
 
 function convertTo24Hour(time) {
 
+    // Handles HTML time input such as 10:00
     if (
         time &&
         !time.includes(" ")
@@ -1756,6 +1613,9 @@ window.addEventListener(
         }
 
 
+        // Do NOT allow login modal to be closed
+        // before login.
+
         if (
             loginModal &&
             e.target === loginModal &&
@@ -1804,36 +1664,33 @@ document.addEventListener(
 
 
 // ========================================
-// INITIALIZE APP
+// INITIAL LOAD
 // ========================================
 
-async function initializeApp() {
+loadLoggedInUser();
 
-    await loadLoggedInUser();
+updateLoginUI();
 
-    updateLoginUI();
+displayEvents();
 
-    displayEvents();
+displayRegisteredEvents();
 
-    displayRegisteredEvents();
-
-    updateStats();
+updateStats();
 
 
-    if (!currentUser) {
+// ========================================
+// SHOW LOGIN ON FIRST VISIT
+// ========================================
 
-        setTimeout(
-            function() {
+if (!currentUser) {
 
-                openLoginModal();
+    setTimeout(
+        function() {
 
-            },
-            300
-        );
+            openLoginModal();
 
-    }
+        },
+        300
+    );
 
 }
-
-
-initializeApp();
